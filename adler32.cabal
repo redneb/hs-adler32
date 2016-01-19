@@ -1,0 +1,31 @@
+name:                adler32
+version:             0.1.0.0
+synopsis:            An implementation of the Adler-32 checksum, supporting rolling checksum operation
+description:
+  This package provides an implementation of the Adler-32 checksum algorithm.
+  In supports a rolling checksum mode, i.e. the checksum of a sliding window
+  of the input message can be computed efficiently. It also supports
+  compounding, i.e. the checksum of the concatenation of two messages can be
+  efficiently computed from the checksums of the two parts.
+homepage:            https://github.com/redneb/hs-adler32
+bug-reports:         https://github.com/redneb/hs-adler32/issues
+license:             BSD3
+license-file:        LICENSE
+author:              Marios Titas <rednebΑΤgmxDΟΤcom>
+maintainer:          Marios Titas <rednebΑΤgmxDΟΤcom>
+category:            Cryptography, Hash
+build-type:          Simple
+cabal-version:       >=1.10
+
+source-repository head
+  type: git
+  location: https://github.com/redneb/hs-adler32.git
+
+library
+  exposed-modules:     Data.Digest.Adler32
+  -- other-modules:       
+  build-depends:         base >=4.8 && <5
+                       , bytestring >=0.10
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+  ghc-options:         -Wall
