@@ -10,6 +10,7 @@ supports more advanced modes such as incremental computation, rolling
 checksum, and compounding.
 -}
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns #-}
 
 module Data.Digest.Adler32
@@ -37,6 +38,12 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Word (Word8, Word32)
 import Data.Bits (unsafeShiftL, unsafeShiftR, (.|.), (.&.))
 import Data.Monoid ((<>))
+
+#ifdef USE_ZLIB
+import qualified Foreign as F
+import qualified Foreign.C as F
+import qualified System.IO.Unsafe as U
+#endif
 
 -- | Compute the Adler-32 checksum of a @ByteString@. This function
 -- does not support computing the checksum incrementally; you have
@@ -73,8 +80,21 @@ class Adler32Src a where
     -- 'Adler32'.
     adler32' :: a -> Adler32
 
+#ifdef USE_ZLIB
+foreign import ccall unsafe "adler32"
+    zlib_adler32 :: F.Word32 -> F.Ptr a -> F.CUInt -> F.Word32
+#endif
+
 instance Adler32Src B.ByteString where
-    adler32' s = loop 1 0 0 (min nmax len)
+    adler32' s =
+#ifdef USE_ZLIB
+        U.unsafePerformIO $
+            B.unsafeUseAsCStringLen s $ \(ptr, len) -> do
+                let c = zlib_adler32 1 ptr (fromIntegral len)
+                return $ makeAdler32 c len
+    {-# NOINLINE adler32' #-}
+#else
+        loop 1 0 0 (min nmax len)
       where
         loop !a !b !i !j
             | i < j = loop a' (b + a') (i + 1) j
@@ -84,6 +104,7 @@ instance Adler32Src B.ByteString where
             a' = a + fromIntegral (B.unsafeIndex s i)
         len = B.length s
         nmax = 5552
+#endif
 
 instance Adler32Src BL.ByteString where
     adler32' = BL.foldlChunks (\c s -> c <> adler32' s) mempty
