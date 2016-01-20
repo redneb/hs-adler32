@@ -4,21 +4,22 @@ Module      : Data.Digest.Adler32
 Stability   : provisional
 Portability : portable
 
-An implementation of the Adler-32 checksum algorithm. For simple cases,
-'adler32' can be used. The slightly lower-level function 'adler32''
-supports more advanced modes such as incremental computation, rolling
-checksum, and compounding.
+An implementation of the Adler-32 checksum algorithm. There are two ways
+to use this module:
+
+* 'adler32' and 'adler32Update' which use 'Word32' for checksums,
+* 'adler32'' which uses the abstract type 'Adler32' for checksums.
+Checksums can be computed incrementally by utilizing the @Monoid@
+instance of 'Adler32'. This mode is slightly more low-level ('extractAdler32'
+has to be used to obtain a 'Word32' for the checksum), but it supports
+some additional operations such rolling check and compounding.
 -}
 
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns #-}
 
 module Data.Digest.Adler32
-    (
-    -- * High-level API
-      adler32
-    -- * Low-level API
-    , Adler32Src(..)
+    ( Adler32Src(..)
     , Adler32
     , extractAdler32
     , makeAdler32
@@ -45,11 +46,25 @@ import qualified Foreign.C as F
 import qualified System.IO.Unsafe as U
 #endif
 
--- | Compute the Adler-32 checksum of a @ByteString@. This function
--- does not support computing the checksum incrementally; you have
--- to use the low-level API for that (see 'adler32'').
-adler32 :: Adler32Src a => a -> Word32
-adler32 = extractAdler32 . adler32'
+-- | Types of messages for which the Adler-32 checksum can be computed.
+class Adler32Src a where
+    -- | Compute the Adler-32 checksum of a @ByteString@.
+    adler32 :: a -> Word32
+    adler32 = extractAdler32 . adler32'
+
+    -- | Update the checksum of a message by providing a @ByteString@ to be
+    -- appended to the original message.
+    adler32Update :: Word32 -> a -> Word32
+    -- use a length of 0, since we will extract the checksum eventually
+    -- and length of the first part is not used
+    adler32Update c s =
+        extractAdler32 $ makeAdler32 c (0 :: Word32) <> adler32' s
+
+    -- | Similar to 'adler32' except that an 'Adler32' is returned. If you
+    -- want to compute the checksum of a message incrementally, you have
+    -- to use this function in conjunction with the @Monoid@ instance of
+    -- 'Adler32'.
+    adler32' :: a -> Adler32
 
 -- | An abstract representation of an Adler-32 checksum. Forcing a value of
 -- this type to whnf will cause it to be evaluated completely.
@@ -62,7 +77,7 @@ instance Show Adler32 where
     show c@(Adler32 _ _ l) =
         "makeAdler32 " ++ show (extractAdler32 c) ++ " " ++ show l
 
--- | Extract the Adler-32 checksum from a 'Adler32' object.
+-- | Extract the actual Adler-32 checksum from a 'Adler32' object.
 extractAdler32 :: Adler32 -> Word32
 extractAdler32 (Adler32 a b _) = a .|. (b `unsafeShiftL` 16)
 
@@ -71,14 +86,7 @@ extractAdler32 (Adler32 a b _) = a .|. (b `unsafeShiftL` 16)
 makeAdler32 :: Integral a => Word32 -> a -> Adler32
 makeAdler32 c l =
     Adler32 (mod0 $ c .&. 0xffff) (mod0 $ c `unsafeShiftR` 16) (fromIntegral $ l `mod` base)
-
--- | Types of messages for which the Adler-32 checksum can be computed.
-class Adler32Src a where
-    -- | Similar to 'adler32' except that an 'Adler32' is returned. If you
-    -- want to compute the checksum of a message incrementally, you have
-    -- to use this function in conjunction with the @Monoid@ instance of
-    -- 'Adler32'.
-    adler32' :: a -> Adler32
+{-# INLINE makeAdler32 #-}
 
 #ifdef USE_ZLIB
 foreign import ccall unsafe "adler32"
@@ -86,15 +94,8 @@ foreign import ccall unsafe "adler32"
 #endif
 
 instance Adler32Src B.ByteString where
-    adler32' s =
-#ifdef USE_ZLIB
-        U.unsafePerformIO $
-            B.unsafeUseAsCStringLen s $ \(ptr, len) -> do
-                let c = zlib_adler32 1 ptr (fromIntegral len)
-                return $ makeAdler32 c len
-    {-# NOINLINE adler32' #-}
-#else
-        loop 1 0 0 (min nmax len)
+#ifndef USE_ZLIB
+    adler32' s = loop 1 0 0 (min nmax len)
       where
         loop !a !b !i !j
             | i < j = loop a' (b + a') (i + 1) j
@@ -104,6 +105,17 @@ instance Adler32Src B.ByteString where
             a' = a + fromIntegral (B.unsafeIndex s i)
         len = B.length s
         nmax = 5552
+#else
+    adler32 = adler32Update 1
+    {-# INLINE adler32 #-}
+
+    adler32Update c s =
+        U.unsafePerformIO $
+            B.unsafeUseAsCStringLen s $ \(ptr, len) -> do
+                return $ zlib_adler32 c ptr (fromIntegral len)
+    {-# NOINLINE adler32Update #-}
+
+    adler32' s = makeAdler32 (adler32 s) (B.length s)
 #endif
 
 instance Adler32Src BL.ByteString where
