@@ -39,6 +39,9 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Word (Word8, Word32)
 import Data.Bits (unsafeShiftL, unsafeShiftR, (.|.), (.&.))
 import Data.Monoid ((<>))
+#if !MIN_VERSION_base(4,8,0)
+import Data.Monoid (Monoid(..))
+#endif
 
 #ifdef USE_ZLIB
 import qualified Foreign as F

@@ -1,10 +1,14 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 import Test.Hspec
 import qualified Data.ByteString as B
 import Data.Word (Word32)
-import Control.Monad (forM_)
+import Data.Foldable (forM_)
 import Data.Monoid ((<>))
+#if !MIN_VERSION_base(4,8,0)
+import Data.Monoid (mempty)
+#endif
 
 import Data.Digest.Adler32
 
