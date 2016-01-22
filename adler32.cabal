@@ -1,6 +1,6 @@
 name:                adler32
 version:             0.1.0.0
-synopsis:            An implementation of the Adler-32 checksum, supporting rolling checksum operation
+synopsis:            An implementation of Adler-32, supporting rolling checksum operation
 description:
   This package provides an implementation of the Adler-32 checksum algorithm.
   In supports a rolling checksum mode, i.e. the checksum of a sliding window
