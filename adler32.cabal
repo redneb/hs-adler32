@@ -27,7 +27,7 @@ source-repository head
   location: https://github.com/redneb/hs-adler32.git
 
 flag zlib
-  description:         Bind to @zlib@ and use the implementation of Adler-32 from there
+  description:         Bind to zlib and use the implementation of Adler-32 from there
   default:             True
 
 library
