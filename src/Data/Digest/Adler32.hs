@@ -8,11 +8,10 @@ An implementation of the Adler-32 checksum algorithm. There are two ways
 to use this module:
 
 * 'adler32' and 'adler32Update' which use 'Word32' for checksums,
-* 'adler32'' which uses the abstract type 'Adler32' for checksums.
-Checksums can be computed incrementally by utilizing the @Monoid@
-instance of 'Adler32'. This mode is slightly more low-level ('extractAdler32'
-has to be used to obtain a 'Word32' for the checksum), but it supports
-some additional operations such rolling check and compounding.
+* 'adler32'' and 'adler32Update'' which use the abstract type 'Adler32' for checksums.
+This mode is slightly more low-level ('extractAdler32' has to be used to obtain
+a 'Word32' for the checksum), but it supports some additional operations such
+rolling checksum and compounding.
 -}
 
 {-# LANGUAGE CPP #-}
@@ -63,11 +62,15 @@ class Adler32Src a where
     adler32Update c s =
         extractAdler32 $ makeAdler32 c (0 :: Word32) <> adler32' s
 
-    -- | Similar to 'adler32' except that an 'Adler32' is returned. If you
-    -- want to compute the checksum of a message incrementally, you have
-    -- to use this function in conjunction with the @Monoid@ instance of
-    -- 'Adler32'.
+    -- | Similar to 'adler32' except that an 'Adler32' value is returned.
     adler32' :: a -> Adler32
+    adler32' = adler32Update' mempty
+    {-# INLINE adler32' #-}
+
+    -- | Similar to 'adler32' except that it operates on 'Adler32' values.
+    -- An 'Adler32' value can also be updated with 'adler32'' in conjunction
+    -- with the @Monoid@ instance of that type.
+    adler32Update' :: Adler32 -> a -> Adler32
 
 -- | An abstract representation of an Adler-32 checksum. Forcing a value of
 -- this type to whnf will cause it to be evaluated completely.
@@ -83,6 +86,7 @@ instance Show Adler32 where
 -- | Extract the actual Adler-32 checksum from a 'Adler32' object.
 extractAdler32 :: Adler32 -> Word32
 extractAdler32 (Adler32 a b _) = a .|. (b `unsafeShiftL` 16)
+{-# INLINE extractAdler32 #-}
 
 -- | @makeAdler32 c l@ will create an 'Adler32' object that corresponds to
 -- a message whose checksum is @c@ and length is @l@.
@@ -94,20 +98,26 @@ makeAdler32 c l =
 #ifdef USE_ZLIB
 foreign import ccall unsafe "adler32"
     zlib_adler32 :: F.Word32 -> F.Ptr a -> F.CUInt -> F.Word32
+#else
+runAdler32 :: B.ByteString -> Word32 -> Word32 -> Word32 -> Adler32
+runAdler32 s a0 b0 l0 = loop a0 b0 0 (min nmax len)
+  where
+    loop !a !b !i !j
+        | i < j = loop a' (b + a') (i + 1) j
+        | j < len = loop (mod1 a) (mod1 b) i (min (i + nmax) len)
+        | otherwise = Adler32 (mod1 a) (mod1 b) (mod1 (l0 + fromIntegral len))
+      where
+        a' = a + fromIntegral (B.unsafeIndex s i)
+    len = B.length s
+    nmax = 5552
 #endif
 
 instance Adler32Src B.ByteString where
 #ifndef USE_ZLIB
-    adler32' s = loop 1 0 0 (min nmax len)
-      where
-        loop !a !b !i !j
-            | i < j = loop a' (b + a') (i + 1) j
-            | j < len = loop (mod1 a) (mod1 b) i (min (i + nmax) len)
-            | otherwise = Adler32 (mod1 a) (mod1 b) (fromIntegral $ mod1 len)
-          where
-            a' = a + fromIntegral (B.unsafeIndex s i)
-        len = B.length s
-        nmax = 5552
+    adler32' s = runAdler32 s 1 0 0
+
+    adler32Update' (Adler32 a b l) s =
+        runAdler32 s a b l
 #else
     adler32 = adler32Update 1
     {-# INLINE adler32 #-}
@@ -119,10 +129,13 @@ instance Adler32Src B.ByteString where
     {-# NOINLINE adler32Update #-}
 
     adler32' s = makeAdler32 (adler32 s) (B.length s)
+
+    adler32Update' c@(Adler32 _ _ l) s =
+        makeAdler32 (adler32Update (extractAdler32 c) s) (l + fromIntegral (B.length s))
 #endif
 
 instance Adler32Src BL.ByteString where
-    adler32' = BL.foldlChunks (\c s -> c <> adler32' s) mempty
+    adler32Update' = BL.foldlChunks (\c s -> c <> adler32' s)
 
 -- | 'mempty' is the checksum of the empty message and '<>' computes the
 -- checksum of the concatenation of two messages. '<>' is an /O(1)/
