@@ -67,7 +67,7 @@ class Adler32Src a where
     adler32' = adler32Update' mempty
     {-# INLINE adler32' #-}
 
-    -- | Similar to 'adler32' except that it operates on 'Adler32' values.
+    -- | Similar to 'adler32update' except that it operates on 'Adler32' values.
     -- An 'Adler32' value can also be updated with 'adler32'' in conjunction
     -- with the @Monoid@ instance of that type.
     adler32Update' :: Adler32 -> a -> Adler32
