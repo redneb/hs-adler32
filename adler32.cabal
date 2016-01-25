@@ -1,5 +1,5 @@
 name:                adler32
-version:             0.1.0.0
+version:             0.1.1.0
 synopsis:            An implementation of Adler-32, supporting rolling checksum operation
 description:
   This package provides an implementation of the Adler-32 checksum algorithm.
@@ -21,6 +21,9 @@ maintainer:          Marios Titas <rednebΑΤgmxDΟΤcom>
 category:            Cryptography, Hash
 build-type:          Simple
 cabal-version:       >=1.10
+
+extra-source-files:
+  ChangeLog.md
 
 source-repository head
   type: git
