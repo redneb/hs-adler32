@@ -37,10 +37,7 @@ import qualified Data.ByteString.Unsafe as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Word (Word8, Word32)
 import Data.Bits (unsafeShiftL, unsafeShiftR, (.|.), (.&.))
-import Data.Monoid ((<>))
-#if !MIN_VERSION_base(4,8,0)
-import Data.Monoid (Monoid(..))
-#endif
+import Data.Semigroup (Semigroup(..))
 
 #ifdef USE_ZLIB
 import qualified Foreign as F
@@ -137,16 +134,22 @@ instance Adler32Src B.ByteString where
 instance Adler32Src BL.ByteString where
     adler32Update' = BL.foldlChunks (\c s -> c <> adler32' s)
 
+instance Semigroup Adler32 where
+    Adler32 a1 b1 l1 <> Adler32 a2 b2 l2 =
+        Adler32 (mod0 $ a1m1 + a2) b (mod0 $ l1 + l2)
+      where
+        b = mod1 $ b1 + b2 + l2 * a1m1
+        a1m1 = if a1 == 0 then base - 1 else a1 - 1
+
 -- | 'mempty' is the checksum of the empty message and '<>' computes the
 -- checksum of the concatenation of two messages. '<>' is an /O(1)/
 -- operation.
 instance Monoid Adler32 where
     mempty = Adler32 1 0 0
-    mappend (Adler32 a1 b1 l1) (Adler32 a2 b2 l2) =
-        Adler32 (mod0 $ a1m1 + a2) b (mod0 $ l1 + l2)
-      where
-        b = mod1 $ b1 + b2 + l2 * a1m1
-        a1m1 = if a1 == 0 then base - 1 else a1 - 1
+
+#if !(MIN_VERSION_base(4,11,0))
+    mappend = (<>)
+#endif
 
 -- | /O(1)/. If @c@ is the checksum of a message that starts with the
 -- byte @d1@ then @adler32SlideL d1 c d2@ is the checksum of the message
